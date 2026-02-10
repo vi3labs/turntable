@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Turntable - Room</title>
+  <link rel="stylesheet" href="css/room.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div class="toast-container" id="toast-container"></div>
+
+  <div class="room-layout">
+    <!-- Top Bar -->
+    <div class="room-topbar">
+      <div class="room-topbar-left">
+        <button class="back-btn" id="back-btn">&larr; Lobby</button>
+        <span class="room-name" id="room-name">Room</span>
+        <span class="room-theme" id="room-theme"></span>
+      </div>
+      <span class="room-user-count" id="room-user-count">0 people</span>
+    </div>
+
+    <!-- Main Content -->
+    <div class="room-main">
+      <!-- Player -->
+      <div class="player-section">
+        <div class="player-container" id="player-container">
+          <div id="youtube-player"></div>
+          <div class="player-idle" id="player-idle">
+            <div class="idle-emoji">🎧</div>
+            <p>Waiting for DJs to queue tracks...</p>
+            <p>Step up and drop a beat!</p>
+          </div>
+          <div class="autoplay-overlay hidden" id="autoplay-overlay">
+            <div class="autoplay-overlay-content">
+              <div class="play-icon">&#9654;</div>
+              <p>Click to start listening</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Now Playing -->
+      <div class="now-playing" id="now-playing">
+        <div class="now-playing-info">
+          <div class="now-playing-title" id="np-title">No track playing</div>
+          <div class="now-playing-dj" id="np-dj"></div>
+          <div class="progress-bar">
+            <div class="progress-bar-fill" id="progress-fill"></div>
+          </div>
+        </div>
+        <div class="now-playing-time" id="np-time"></div>
+        <div class="vote-buttons">
+          <button class="vote-btn vote-btn-awesome" id="vote-awesome">
+            &#9650; <span class="vote-count" id="awesome-count">0</span>
+          </button>
+          <button class="vote-btn vote-btn-lame" id="vote-lame">
+            &#9660; <span class="vote-count" id="lame-count">0</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Chat -->
+      <div class="chat-section">
+        <div class="chat-messages" id="chat-messages"></div>
+        <div class="chat-input-wrapper">
+          <input type="text" class="chat-input" id="chat-input" placeholder="Say something..." maxlength="500" autocomplete="off">
+          <button class="chat-send-btn" id="chat-send">Send</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Sidebar -->
+    <div class="room-sidebar">
+      <div class="sidebar-tabs">
+        <button class="sidebar-tab active" data-tab="roster">People</button>
+        <button class="sidebar-tab" data-tab="queue">Queue</button>
+      </div>
+
+      <!-- Roster Panel -->
+      <div class="sidebar-panel active" id="panel-roster">
+        <div class="roster-section">
+          <div class="roster-label">DJs (<span id="dj-count">0</span>/<span id="dj-max">5</span>)</div>
+          <div class="roster-list" id="roster-djs"></div>
+
+          <div id="dj-btn-wrapper" style="margin-top: 12px;">
+            <button class="dj-step-btn dj-step-up" id="dj-step-up">Step Up to DJ</button>
+            <button class="dj-step-btn dj-step-down hidden" id="dj-step-down">Step Down</button>
+          </div>
+
+          <div class="roster-label" style="margin-top: 20px;">Listeners</div>
+          <div class="roster-list" id="roster-listeners"></div>
+        </div>
+      </div>
+
+      <!-- Queue Panel -->
+      <div class="sidebar-panel" id="panel-queue">
+        <div class="queue-section">
+          <div id="queue-tracks"></div>
+          <div class="queue-empty hidden" id="queue-empty">
+            <p>Your queue is empty.</p>
+            <p style="margin-top: 8px; font-size: 11px;">Search or paste a YouTube URL below.</p>
+          </div>
+
+          <div class="add-track-section" id="add-track-section">
+            <div class="add-track-input-wrapper">
+              <input type="text" class="add-track-input" id="add-track-input" placeholder="Search or paste YouTube URL..." autocomplete="off">
+              <button class="add-track-btn" id="add-track-btn">+</button>
+            </div>
+            <div class="search-results hidden" id="search-results"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="js/socket.js"></script>
+  <script src="js/player.js"></script>
+  <script src="js/chat.js"></script>
+  <script src="js/roster.js"></script>
+  <script src="js/queue.js"></script>
+  <script src="js/voting.js"></script>
+  <script src="js/room.js"></script>
+</body>
+</html>

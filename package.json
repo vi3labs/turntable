@@ -1,0 +1,17 @@
+{
+  "name": "turntable",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "node --watch server/index.js"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "helmet": "^8.1.0",
+    "nanoid": "^5.0.9",
+    "socket.io": "^4.8.1"
+  }
+}

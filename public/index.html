@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Turntable</title>
+  <link rel="stylesheet" href="css/lobby.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div class="lobby">
+    <header class="lobby-header">
+      <h1><span>Turntable</span></h1>
+      <p>Drop the beat. Together.</p>
+    </header>
+
+    <section class="entry-section">
+      <h2>Who are you?</h2>
+      <div class="entry-form">
+        <div>
+          <label for="username">Username</label>
+          <input type="text" id="username" placeholder="DJ name..." maxlength="20" autocomplete="off">
+        </div>
+        <div>
+          <label>Avatar</label>
+          <div class="avatar-picker" id="avatar-picker"></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="create-section">
+      <h2>Create a room</h2>
+      <div class="create-form">
+        <div>
+          <label for="room-name">Room Name</label>
+          <input type="text" id="room-name" placeholder="90s Hip-Hop..." maxlength="50" autocomplete="off">
+        </div>
+        <div>
+          <label for="room-theme">Theme (optional)</label>
+          <input type="text" id="room-theme" placeholder="chill vibes..." maxlength="30" autocomplete="off">
+        </div>
+        <button class="btn btn-primary" id="create-room-btn">Create Room</button>
+      </div>
+    </section>
+
+    <section class="rooms-section">
+      <h2>Active Rooms</h2>
+      <div class="rooms-grid" id="rooms-grid">
+        <div class="empty-state" id="empty-state">
+          <div class="emoji">🎧</div>
+          <p>No rooms yet. Create one to get started!</p>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="js/lobby.js"></script>
+</body>
+</html>
