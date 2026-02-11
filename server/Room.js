@@ -13,7 +13,7 @@ export class Room {
     this.users = new Map(); // Map<socketId, User>
     this.socketToPublicId = new Map(); // socketId -> publicId
     this.djQueue = new DJQueue(5);
-    this.syncEngine = new SyncEngine(() => this.onTrackEnd());
+    this.syncEngine = new SyncEngine((endedDJ) => this.onTrackEnd(endedDJ));
 
     // Votes for current track
     this.votes = {
@@ -169,12 +169,12 @@ export class Room {
     return awesomeCount;
   }
 
-  onTrackEnd() {
-    // Award reputation to DJ
+  onTrackEnd(endedDJ) {
+    // Award reputation to DJ (endedDJ passed from SyncEngine before state is cleared)
     const awesomeCount = this.resetVotes();
-    if (this.syncEngine.currentDJ) {
-      this.djQueue.awardReputation(this.syncEngine.currentDJ, awesomeCount);
-      const user = this.users.get(this.syncEngine.currentDJ);
+    if (endedDJ) {
+      this.djQueue.awardReputation(endedDJ, awesomeCount);
+      const user = this.users.get(endedDJ);
       if (user) user.reputation += awesomeCount;
     }
 

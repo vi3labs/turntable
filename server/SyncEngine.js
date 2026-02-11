@@ -39,12 +39,15 @@ export class SyncEngine {
       }
     }
 
+    // Save DJ reference before clearing (needed for reputation awarding)
+    const endedDJ = this.currentDJ;
+
     this.clearTimer();
     this.isPlaying = false;
     this.currentTrack = null;
     this.currentDJ = null;
     this.currentDJUsername = null;
-    if (this.onTrackEnd) this.onTrackEnd();
+    if (this.onTrackEnd) this.onTrackEnd(endedDJ);
   }
 
   reportTrackEnded(videoId) {

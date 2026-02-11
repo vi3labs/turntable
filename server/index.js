@@ -629,6 +629,9 @@ io.on('connection', (socket) => {
       const remaining = duration - elapsed + 1.5;
       if (remaining > 0) {
         sync.trackEndTimer = setTimeout(() => sync.handleTrackEnd(), remaining * 1000);
+      } else {
+        // Track already past its duration — end it now
+        sync.handleTrackEnd();
       }
     }
 
@@ -716,8 +719,18 @@ setInterval(() => {
 // Periodic sync broadcast (every 5 seconds for active rooms)
 setInterval(() => {
   for (const [roomId, room] of roomManager.rooms) {
-    if (room.syncEngine.isPlaying) {
+    const sync = room.syncEngine;
+    if (sync.isPlaying) {
       io.to(roomId).emit('track:sync', room.getPublicSyncState());
+
+      // Watchdog: detect stale tracks where the timer was lost
+      if (sync.currentTrack) {
+        const elapsed = sync.getElapsedSeconds();
+        if (elapsed > sync.currentTrack.duration + 5) {
+          console.log(`[Watchdog] Track "${sync.currentTrack.title}" stale (elapsed=${elapsed.toFixed(1)}s, duration=${sync.currentTrack.duration}s). Forcing advance.`);
+          sync.handleTrackEnd();
+        }
+      }
     }
   }
 }, 5000);
