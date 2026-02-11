@@ -247,3 +247,73 @@
 .empty-state p {
   font-size: var(--font-size-sm);
 }
+
+/* Theme picker */
+.theme-picker {
+  display: flex;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+}
+
+.theme-option {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: var(--space-sm);
+  background: var(--bg-tertiary);
+  border: 2px solid transparent;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
+}
+
+.theme-option:hover {
+  background: var(--accent-primary-dim);
+}
+
+.theme-option.selected {
+  border-color: var(--accent-primary);
+  color: var(--text-primary);
+}
+
+.theme-swatch {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-sm);
+}
+
+.theme-swatch-default { background: linear-gradient(135deg, #6c5ce7, #242432); }
+.theme-swatch-neon { background: linear-gradient(135deg, #ff006e, #1a0012); }
+.theme-swatch-chill { background: linear-gradient(135deg, #00cec9, #0a1a1a); }
+.theme-swatch-retro { background: linear-gradient(135deg, #e17055, #1a110e); }
+.theme-swatch-midnight { background: linear-gradient(135deg, #0984e3, #0a0e1a); }
+
+/* Seed tracks */
+.seed-tracks-section {
+  width: 100%;
+}
+
+.seed-tracks-input {
+  width: 100%;
+  background: var(--bg-input);
+  border: 1px solid var(--border-panel);
+  border-radius: var(--radius-sm);
+  padding: 10px 14px;
+  color: var(--text-primary);
+  font-size: var(--font-size-sm);
+  font-family: var(--font-family);
+  resize: vertical;
+  min-height: 60px;
+  transition: border-color var(--transition-fast);
+}
+
+.seed-tracks-input::placeholder {
+  color: var(--text-muted);
+}
+
+.seed-tracks-input:focus {
+  border-color: var(--border-focus);
+}

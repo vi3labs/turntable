@@ -23,7 +23,7 @@
       <div class="entry-form">
         <div>
           <label for="username">Username</label>
-          <input type="text" id="username" placeholder="DJ name..." maxlength="20" autocomplete="off">
+          <input type="text" id="username" placeholder="Optional - auto-generated" maxlength="20" autocomplete="off">
         </div>
         <div>
           <label>Avatar</label>
@@ -40,8 +40,33 @@
           <input type="text" id="room-name" placeholder="90s Hip-Hop..." maxlength="50" autocomplete="off">
         </div>
         <div>
-          <label for="room-theme">Theme (optional)</label>
-          <input type="text" id="room-theme" placeholder="chill vibes..." maxlength="30" autocomplete="off">
+          <label>Theme</label>
+          <div class="theme-picker" id="theme-picker">
+            <button class="theme-option selected" data-theme="">
+              <div class="theme-swatch theme-swatch-default"></div>
+              <span>Default</span>
+            </button>
+            <button class="theme-option" data-theme="neon">
+              <div class="theme-swatch theme-swatch-neon"></div>
+              <span>Neon</span>
+            </button>
+            <button class="theme-option" data-theme="chill">
+              <div class="theme-swatch theme-swatch-chill"></div>
+              <span>Chill</span>
+            </button>
+            <button class="theme-option" data-theme="retro">
+              <div class="theme-swatch theme-swatch-retro"></div>
+              <span>Retro</span>
+            </button>
+            <button class="theme-option" data-theme="midnight">
+              <div class="theme-swatch theme-swatch-midnight"></div>
+              <span>Midnight</span>
+            </button>
+          </div>
+        </div>
+        <div class="seed-tracks-section">
+          <label>Seed Tracks (optional)</label>
+          <textarea id="seed-tracks" class="seed-tracks-input" rows="3" placeholder="Paste YouTube URLs (one per line) or a playlist URL"></textarea>
         </div>
         <button class="btn btn-primary" id="create-room-btn">Create Room</button>
       </div>

@@ -60,9 +60,15 @@
     font-size: var(--font-size-xs);
   }
 
-  /* On mobile the sidebar is full-width at bottom, move QR to left side */
-  .qr-widget {
+  /* On mobile move QR toggle to left side */
+  .qr-toggle-btn {
     bottom: var(--space-sm);
+    left: var(--space-sm);
+    right: auto;
+  }
+
+  .qr-widget {
+    bottom: calc(var(--space-sm) + 48px);
     left: var(--space-sm);
     right: auto;
     padding: 4px;
@@ -107,7 +113,11 @@
     min-height: 180px;
   }
 
-  /* Hide QR widget in landscape to save space */
+  /* Hide QR in landscape to save space */
+  .qr-toggle-btn {
+    display: none;
+  }
+
   .qr-widget {
     display: none;
   }

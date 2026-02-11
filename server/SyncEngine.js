@@ -29,6 +29,16 @@ export class SyncEngine {
   handleTrackEnd() {
     if (this.transitioning) return;
     this.transitioning = true;
+
+    // Log premature track endings for diagnostics
+    if (this.currentTrack) {
+      const elapsed = this.getElapsedSeconds();
+      const duration = this.currentTrack.duration;
+      if (elapsed < duration * 0.9) {
+        console.log(`[SyncEngine] Track ended prematurely: "${this.currentTrack.title}" elapsed=${elapsed.toFixed(1)}s / duration=${duration}s`);
+      }
+    }
+
     this.clearTimer();
     this.isPlaying = false;
     this.currentTrack = null;

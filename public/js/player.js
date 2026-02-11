@@ -10,6 +10,7 @@ const Player = {
   _autoplayCheckTimer: null,
   _userPaused: false,
   _pendingTrack: null,  // Track waiting for YouTube API to be ready
+  _lastLoadTime: null,
 
   init(containerId) {
     // Load YouTube IFrame API
@@ -84,6 +85,7 @@ const Player = {
     if (!this.isReady) return;
     this.currentVideoId = videoId;
     this._metadataReported = false;
+    this._lastLoadTime = Date.now();
 
     document.getElementById('player-idle').classList.add('hidden');
 
@@ -181,6 +183,19 @@ const Player = {
 
   onStateChange(event) {
     if (event.data === YT.PlayerState.ENDED) {
+      // Detect suspiciously fast endings (embed failures)
+      if (this.currentVideoId && this._lastLoadTime) {
+        const playDuration = (Date.now() - this._lastLoadTime) / 1000;
+        if (playDuration < 5 && this.currentDuration > 30) {
+          Toast.show('Track may have failed to load properly', 'error');
+          Socket.emit('track:ended', {
+            videoId: this.currentVideoId,
+            error: true,
+            errorReason: 'Track ended suspiciously fast (' + Math.round(playDuration) + 's)'
+          });
+          return;
+        }
+      }
       Socket.emit('track:ended', { videoId: this.currentVideoId });
     }
 
@@ -242,18 +257,21 @@ const Player = {
 
   onError(event) {
     const code = event.data;
-    // 2 = invalid param, 5 = HTML5 player error, 100 = not found, 101/150 = embed blocked
-    if ([2, 5, 100, 101, 150].includes(code)) {
-      const messages = {
-        2: 'Invalid video ID',
-        5: 'Playback error',
-        100: 'Video not found',
-        101: 'Embedding not allowed',
-        150: 'Embedding not allowed'
-      };
-      Toast.show((messages[code] || 'Player error') + '. Skipping...', 'error');
-      Socket.emit('track:ended', { videoId: this.currentVideoId, error: 'playback_error' });
-    }
+    const messages = {
+      2: 'Invalid video ID',
+      5: 'HTML5 player error',
+      100: 'Video not found or removed',
+      101: 'Embedding not allowed by video owner',
+      150: 'Embedding not allowed by video owner'
+    };
+    const reason = messages[code] || 'Unknown player error (code ' + code + ')';
+    Toast.show(reason + '. Skipping...', 'error');
+    Socket.emit('track:ended', {
+      videoId: this.currentVideoId,
+      error: true,
+      errorCode: code,
+      errorReason: reason
+    });
   },
 
   updateNowPlaying(state) {

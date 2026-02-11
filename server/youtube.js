@@ -140,7 +140,7 @@ export async function getVideoInfo(videoId) {
 
   try {
     const params = new URLSearchParams({
-      part: 'snippet,contentDetails',
+      part: 'snippet,contentDetails,status',
       id: videoId,
       key: YOUTUBE_API_KEY
     });
@@ -156,6 +156,12 @@ export async function getVideoInfo(videoId) {
     if (!data.items || data.items.length === 0) return null;
 
     const item = data.items[0];
+
+    // Reject non-embeddable videos
+    if (item.status && item.status.embeddable === false) {
+      return { error: 'This video cannot be embedded. Try a different version.' };
+    }
+
     const result = {
       videoId: item.id,
       title: item.snippet.title,
@@ -183,6 +189,61 @@ export function extractVideoId(input) {
     if (match) return match[1];
   }
   return null;
+}
+
+export async function getPlaylistItems(playlistId, maxItems = 20) {
+  if (!YOUTUBE_API_KEY) return { error: 'YouTube API key not configured' };
+  if (isQuotaExhausted()) return { error: 'YouTube API quota exceeded' };
+
+  try {
+    const params = new URLSearchParams({
+      part: 'contentDetails',
+      playlistId,
+      maxResults: maxItems.toString(),
+      key: YOUTUBE_API_KEY
+    });
+
+    const response = await fetch(`${BASE_URL}/playlistItems?${params}`);
+    const data = await response.json();
+
+    if (data.error) {
+      if (isQuotaError(data)) markQuotaExhausted();
+      return { error: data.error.message };
+    }
+
+    if (!data.items || data.items.length === 0) return [];
+
+    const videoIds = data.items
+      .map(i => i.contentDetails?.videoId)
+      .filter(Boolean)
+      .join(',');
+
+    const detailParams = new URLSearchParams({
+      part: 'snippet,contentDetails,status',
+      id: videoIds,
+      key: YOUTUBE_API_KEY
+    });
+
+    const detailResponse = await fetch(`${BASE_URL}/videos?${detailParams}`);
+    const detailData = await detailResponse.json();
+
+    if (detailData.error && isQuotaError(detailData)) {
+      markQuotaExhausted();
+      return { error: 'YouTube API quota exceeded' };
+    }
+
+    return (detailData.items || [])
+      .filter(item => item.status?.embeddable !== false)
+      .map(item => ({
+        videoId: item.id,
+        title: item.snippet.title,
+        channel: item.snippet.channelTitle,
+        thumbnail: item.snippet.thumbnails.medium?.url || item.snippet.thumbnails.default?.url,
+        duration: parseDuration(item.contentDetails.duration)
+      }));
+  } catch (err) {
+    return { error: err.message };
+  }
 }
 
 function parseDuration(iso) {

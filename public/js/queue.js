@@ -4,6 +4,8 @@ const Queue = {
   allSlots: [],
   currentIndex: -1,
   searchTimeout: null,
+  searchCache: new Map(),
+  SEARCH_CACHE_TTL: 5 * 60 * 1000,
 
   init() {
     const input = document.getElementById('add-track-input');
@@ -74,17 +76,37 @@ const Queue = {
   async search(query) {
     const resultsEl = document.getElementById('search-results');
 
+    // Check client cache first
+    const cacheKey = query.toLowerCase().trim();
+    const cached = this.searchCache.get(cacheKey);
+    if (cached && Date.now() - cached.timestamp < this.SEARCH_CACHE_TTL) {
+      this.renderSearchResults(cached.results, resultsEl);
+      return;
+    }
+
     try {
       const response = await fetch('/api/youtube/search?q=' + encodeURIComponent(query));
+      const remaining = response.headers.get('X-RateLimit-Remaining');
+      const resetSeconds = response.headers.get('X-RateLimit-Reset');
       const results = await response.json();
 
       if (results.error) {
+        const retryAfter = results.retryAfterSeconds || parseInt(resetSeconds) || 60;
         const msg = response.status === 503 || results.quotaExceeded
           ? 'YouTube search quota reached. Paste a YouTube URL directly to add tracks.'
-          : 'Search unavailable. Try pasting a YouTube URL instead.';
+          : 'Search limit reached. Try again in ' + retryAfter + 's, or paste a YouTube URL.';
         resultsEl.innerHTML = '<div style="padding: 8px; color: var(--text-muted); font-size: 12px;">' + msg + '</div>';
         resultsEl.classList.remove('hidden');
+
+        if (response.status === 429) {
+          this.showSearchCooldown(retryAfter);
+        }
         return;
+      }
+
+      // Warn when searches getting low
+      if (remaining !== null && parseInt(remaining) <= 5) {
+        Toast.show(remaining + ' searches remaining this minute');
       }
 
       if (!Array.isArray(results) || results.length === 0) {
@@ -93,53 +115,79 @@ const Queue = {
         return;
       }
 
-      resultsEl.innerHTML = '';
-      results.forEach(track => {
-        const el = document.createElement('div');
-        el.className = 'search-result';
+      // Cache results
+      this.searchCache.set(cacheKey, { results, timestamp: Date.now() });
 
-        const thumb = document.createElement('img');
-        thumb.className = 'search-result-thumb';
-        thumb.src = track.thumbnail || '';
-        thumb.alt = '';
-        thumb.loading = 'lazy';
-
-        const info = document.createElement('div');
-        info.className = 'search-result-info';
-
-        const title = document.createElement('div');
-        title.className = 'search-result-title';
-        title.textContent = track.title;
-
-        const channel = document.createElement('div');
-        channel.className = 'search-result-channel';
-        channel.textContent = track.channel + ' · ' + formatTime(track.duration);
-
-        info.appendChild(title);
-        info.appendChild(channel);
-
-        const addBtn = document.createElement('button');
-        addBtn.className = 'search-result-add';
-        addBtn.textContent = '+';
-        addBtn.addEventListener('click', (e) => {
-          e.stopPropagation();
-          this.addFromSearch(track);
-        });
-
-        el.appendChild(thumb);
-        el.appendChild(info);
-        el.appendChild(addBtn);
-
-        el.addEventListener('click', () => this.addFromSearch(track));
-
-        resultsEl.appendChild(el);
-      });
-
-      resultsEl.classList.remove('hidden');
+      this.renderSearchResults(results, resultsEl);
     } catch (err) {
       resultsEl.innerHTML = '<div style="padding: 8px; color: var(--text-muted); font-size: 12px;">Search failed. Try pasting a YouTube URL.</div>';
       resultsEl.classList.remove('hidden');
     }
+  },
+
+  renderSearchResults(results, resultsEl) {
+    resultsEl.innerHTML = '';
+    results.forEach(track => {
+      const el = document.createElement('div');
+      el.className = 'search-result';
+
+      const thumb = document.createElement('img');
+      thumb.className = 'search-result-thumb';
+      thumb.src = track.thumbnail || '';
+      thumb.alt = '';
+      thumb.loading = 'lazy';
+
+      const info = document.createElement('div');
+      info.className = 'search-result-info';
+
+      const title = document.createElement('div');
+      title.className = 'search-result-title';
+      title.textContent = track.title;
+
+      const channel = document.createElement('div');
+      channel.className = 'search-result-channel';
+      channel.textContent = track.channel + ' · ' + formatTime(track.duration);
+
+      info.appendChild(title);
+      info.appendChild(channel);
+
+      const addBtn = document.createElement('button');
+      addBtn.className = 'search-result-add';
+      addBtn.textContent = '+';
+      addBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.addFromSearch(track);
+      });
+
+      el.appendChild(thumb);
+      el.appendChild(info);
+      el.appendChild(addBtn);
+
+      el.addEventListener('click', () => this.addFromSearch(track));
+
+      resultsEl.appendChild(el);
+    });
+
+    resultsEl.classList.remove('hidden');
+  },
+
+  showSearchCooldown(seconds) {
+    const input = document.getElementById('add-track-input');
+    const originalPlaceholder = input.placeholder;
+    input.disabled = true;
+
+    let remaining = seconds;
+    const update = () => {
+      if (remaining <= 0) {
+        input.placeholder = originalPlaceholder;
+        input.disabled = false;
+        return;
+      }
+      input.placeholder = 'Search available in ' + remaining + 's... (paste URL to bypass)';
+      remaining--;
+      setTimeout(update, 1000);
+    };
+    update();
   },
 
   addFromSearch(track) {
@@ -182,7 +230,6 @@ const Queue = {
         return;
       }
 
-      let hasContent = false;
       this.allSlots.forEach((slot, i) => {
         const group = document.createElement('div');
         group.className = 'queue-dj-group';
@@ -204,7 +251,6 @@ const Queue = {
         group.appendChild(label);
 
         if (slot.queue && slot.queue.length > 0) {
-          hasContent = true;
           slot.queue.forEach(track => {
             const el = document.createElement('div');
             el.className = 'queue-track';
@@ -241,10 +287,6 @@ const Queue = {
 
         container.appendChild(group);
       });
-
-      if (!hasContent && this.allSlots.length > 0) {
-        // All DJs have empty queues — still show the groups
-      }
 
       return;
     }

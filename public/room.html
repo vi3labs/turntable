@@ -25,6 +25,8 @@
         <span class="room-theme" id="room-theme"></span>
       </div>
       <div style="display:flex;align-items:center;gap:8px;">
+        <span class="room-username" id="room-username"></span>
+        <button class="edit-name-btn" id="edit-name-btn" title="Change name">&#9998;</button>
         <span class="room-user-count" id="room-user-count">0 people</span>
         <button class="theme-toggle" id="theme-toggle" title="Toggle light/dark mode" style="position:static;width:32px;height:32px;font-size:14px;"></button>
       </div>
@@ -130,8 +132,9 @@
     </div>
   </div>
 
-  <!-- QR Code -->
-  <div class="qr-widget" id="qr-widget">
+  <!-- QR Share Toggle -->
+  <button class="qr-toggle-btn" id="qr-toggle-btn" title="Share room link">&#128279;</button>
+  <div class="qr-widget hidden" id="qr-widget">
     <img class="qr-img" id="qr-img" alt="Scan to join" width="80" height="80">
     <div class="qr-label">Scan to join</div>
   </div>

@@ -4,7 +4,7 @@ import helmet from 'helmet';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
 import { RoomManager } from './RoomManager.js';
-import { searchVideos, getVideoInfo, extractVideoId } from './youtube.js';
+import { searchVideos, getVideoInfo, extractVideoId, getPlaylistItems } from './youtube.js';
 
 const app = express();
 const httpServer = createServer(app);
@@ -71,7 +71,7 @@ class RateLimiter {
 const chatLimiter = new RateLimiter(5, 10000);       // 5 msgs / 10s
 const actionLimiter = new RateLimiter(10, 5000);      // 10 actions / 5s (DJ, vote, etc.)
 const roomCreateLimiter = new RateLimiter(3, 60000);   // 3 rooms / 60s
-const searchLimiter = new RateLimiter(10, 60000);      // 10 searches / 60s per IP
+const searchLimiter = new RateLimiter(20, 60000);      // 20 searches / 60s per IP
 
 // =============================================================================
 // Connection limits
@@ -132,9 +132,28 @@ function isValidThumbnailUrl(url) {
 // =============================================================================
 app.get('/api/youtube/search', async (req, res) => {
   const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip;
+
+  // Calculate remaining before checking
+  const record = searchLimiter.records.get(ip);
+  const now = Date.now();
+  const recentHits = record
+    ? record.timestamps.filter(t => now - t < searchLimiter.windowMs).length
+    : 0;
+
   if (!searchLimiter.check(ip)) {
-    return res.status(429).json({ error: 'Too many searches. Try again later.' });
+    const oldestInWindow = record.timestamps.find(t => now - t < searchLimiter.windowMs);
+    const retryAfterMs = oldestInWindow ? searchLimiter.windowMs - (now - oldestInWindow) : 60000;
+    res.set('X-RateLimit-Remaining', '0');
+    res.set('X-RateLimit-Reset', Math.ceil(retryAfterMs / 1000).toString());
+    return res.status(429).json({
+      error: 'Too many searches. Try again later.',
+      retryAfterSeconds: Math.ceil(retryAfterMs / 1000)
+    });
   }
+
+  const remaining = Math.max(0, searchLimiter.maxHits - recentHits - 1);
+  res.set('X-RateLimit-Remaining', remaining.toString());
+
   const q = req.query.q;
   if (!q || typeof q !== 'string') return res.json([]);
   const results = await searchVideos(q.substring(0, 200));
@@ -195,7 +214,7 @@ io.on('connection', (socket) => {
   });
 
   // --- Create room ---
-  socket.on('room:create', (data) => {
+  socket.on('room:create', async (data) => {
     if (!data || typeof data !== 'object') return;
     if (!isNonEmptyString(data.name) || !isNonEmptyString(data.username)) {
       return socket.emit('room:error', { message: 'Name and username required' });
@@ -216,6 +235,33 @@ io.on('connection', (socket) => {
     );
 
     room.onTrackEndCallback = (r) => advanceTrack(r);
+
+    // Process seed tracks if provided
+    if (Array.isArray(data.seedTracks) && data.seedTracks.length > 0) {
+      room._seedTracks = [];
+
+      const playlistEntry = data.seedTracks.find(t => t.playlistId);
+      if (playlistEntry) {
+        const items = await getPlaylistItems(
+          sanitizeString(playlistEntry.playlistId, 50),
+          20
+        );
+        if (Array.isArray(items)) {
+          room._seedTracks = items;
+        }
+      } else {
+        const videoIds = data.seedTracks
+          .filter(t => t.videoId && /^[a-zA-Z0-9_-]{11}$/.test(t.videoId))
+          .slice(0, 20);
+
+        for (const { videoId } of videoIds) {
+          const info = await getVideoInfo(videoId);
+          if (info && !info.error && info.duration > 0) {
+            room._seedTracks.push(info);
+          }
+        }
+      }
+    }
 
     socket.emit('room:created', { roomId: room.id });
     broadcastRoomList();
@@ -252,6 +298,20 @@ io.on('connection', (socket) => {
     // Ensure track end callback is set
     if (!room.onTrackEndCallback) {
       room.onTrackEndCallback = (r) => advanceTrack(r);
+    }
+
+    // Auto step-up creator as DJ with seed tracks
+    if (room._seedTracks && room._seedTracks.length > 0 && socket.id === room.createdBy) {
+      const user = room.users.get(socket.id);
+      const stepResult = room.djQueue.stepUp(socket.id, user.username, user.avatarId);
+      if (stepResult.success) {
+        user.role = 'dj';
+        for (const track of room._seedTracks) {
+          room.djQueue.addTrack(socket.id, { ...track, addedAt: Date.now() });
+        }
+        room._seedTracks = null;
+        advanceTrack(room);
+      }
     }
 
     // Send full state to joining client (includes myId)
@@ -359,6 +419,9 @@ io.on('connection', (socket) => {
         return socket.emit('room:error', { message: 'Invalid YouTube URL' });
       }
       const info = await getVideoInfo(id);
+      if (info && info.error) {
+        return socket.emit('room:error', { message: info.error });
+      }
       if (info && !info.error && info.duration > 0) {
         track = info;
       } else {
@@ -502,6 +565,37 @@ io.on('connection', (socket) => {
     io.to(currentRoomId).emit('chat:message', message);
   });
 
+  // --- Rename ---
+  socket.on('user:rename', (data) => {
+    if (!currentRoomId) return;
+    if (!data || typeof data !== 'object') return;
+    if (!actionLimiter.check(socketIP)) return;
+
+    const room = roomManager.getRoom(currentRoomId);
+    if (!room) return;
+
+    const user = room.users.get(socket.id);
+    if (!user) return;
+
+    const newName = sanitizeString(data.username, 20);
+    if (!newName) return;
+
+    const oldName = user.username;
+    if (oldName === newName) return;
+
+    user.username = newName;
+
+    // Update DJ slot if they're a DJ
+    const djSlot = room.djQueue.getDJ(socket.id);
+    if (djSlot) djSlot.username = newName;
+
+    io.to(currentRoomId).emit('roster:update', { users: room.sanitizeUsers() });
+    io.to(currentRoomId).emit('dj:update', room.getPublicDJState());
+    io.to(currentRoomId).emit('chat:system', {
+      text: oldName + ' is now known as ' + newName
+    });
+  });
+
   // --- Track events from client ---
 
   // Only the current DJ can report metadata
@@ -551,6 +645,15 @@ io.on('connection', (socket) => {
 
     const room = roomManager.getRoom(currentRoomId);
     if (!room) return;
+
+    // If error-triggered skip, notify the room
+    if (data.error && room.syncEngine.currentTrack?.videoId === data.videoId) {
+      const reason = sanitizeString(data.errorReason || 'playback error', 100);
+      io.to(currentRoomId).emit('track:skip', {
+        reason: 'Track skipped: ' + reason
+      });
+    }
+
     room.syncEngine.reportTrackEnded(data.videoId);
   });
 

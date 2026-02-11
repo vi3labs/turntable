@@ -1,5 +1,6 @@
 const RoomController = {
   roomId: null,
+  _wasDJ: false,
 
   init() {
     // Get room ID from URL
@@ -45,6 +46,9 @@ const RoomController = {
 
     // Initialize QR code
     this.initQRCode();
+
+    // Initialize name editor
+    this.initNameEditor();
 
     // Calibrate clock then join
     Player.calibrateClock().then(() => {
@@ -154,6 +158,19 @@ const RoomController = {
     Socket.on('dj:update', (data) => {
       Roster.onDJUpdate(data);
       Queue.onDJUpdate(data);
+
+      // Auto-switch to Queue tab when user first becomes a DJ
+      const mySlot = data.slots.find(s => s.userId === Socket.myId);
+      if (mySlot && !this._wasDJ) {
+        document.querySelectorAll('.sidebar-tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.sidebar-panel').forEach(p => p.classList.remove('active'));
+        const queueTab = document.querySelector('.sidebar-tab[data-tab="queue"]');
+        if (queueTab) queueTab.classList.add('active');
+        document.getElementById('panel-queue').classList.add('active');
+        const searchInput = document.getElementById('add-track-input');
+        if (searchInput) setTimeout(() => searchInput.focus(), 100);
+      }
+      this._wasDJ = !!mySlot;
     });
 
     // Room not found
@@ -176,8 +193,15 @@ const RoomController = {
     layout.classList.remove('room-theme-neon', 'room-theme-chill', 'room-theme-retro', 'room-theme-midnight');
 
     if (!themeText) return;
-    const t = themeText.toLowerCase();
 
+    const validThemes = ['neon', 'chill', 'retro', 'midnight'];
+    if (validThemes.includes(themeText)) {
+      layout.classList.add('room-theme-' + themeText);
+      return;
+    }
+
+    // Fallback regex for backward compat with old free-text themes
+    const t = themeText.toLowerCase();
     if (/neon|rave|edm|techno|electric|house/.test(t)) {
       layout.classList.add('room-theme-neon');
     } else if (/chill|lofi|lo-fi|ambient|relax|jazz|acoustic/.test(t)) {
@@ -232,10 +256,16 @@ const RoomController = {
     const roomUrl = window.location.href;
     const qrApiUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=200x200&margin=8&data=' + encodeURIComponent(roomUrl);
 
-    // Small widget
+    // Toggle button + collapsible widget
+    const toggleBtn = document.getElementById('qr-toggle-btn');
     const widget = document.getElementById('qr-widget');
     const img = document.getElementById('qr-img');
     img.src = qrApiUrl;
+
+    // Toggle QR visibility
+    toggleBtn.addEventListener('click', () => {
+      widget.classList.toggle('hidden');
+    });
 
     // Modal elements
     const modal = document.getElementById('qr-modal');
@@ -247,8 +277,9 @@ const RoomController = {
     modalImg.src = qrApiUrl;
     modalUrl.textContent = roomUrl;
 
-    // Click widget to open modal
-    widget.addEventListener('click', () => {
+    // Click QR image to open full modal
+    widget.addEventListener('click', (e) => {
+      if (e.target === toggleBtn) return;
       modal.classList.remove('hidden');
     });
 
@@ -266,6 +297,40 @@ const RoomController = {
       navigator.clipboard.writeText(roomUrl).then(() => {
         copyBtn.textContent = 'Copied!';
         setTimeout(() => { copyBtn.textContent = 'Copy Link'; }, 2000);
+      });
+    });
+  },
+
+  initNameEditor() {
+    const username = sessionStorage.getItem('tt_username');
+    const display = document.getElementById('room-username');
+    const editBtn = document.getElementById('edit-name-btn');
+    if (!display || !editBtn) return;
+
+    display.textContent = username;
+
+    editBtn.addEventListener('click', () => {
+      const current = display.textContent;
+      display.textContent = '';
+      const input = document.createElement('input');
+      input.className = 'edit-name-input';
+      input.value = current;
+      input.maxLength = 20;
+      display.appendChild(input);
+      input.focus();
+      input.select();
+
+      const save = () => {
+        const newName = input.value.trim() || current;
+        display.textContent = newName;
+        sessionStorage.setItem('tt_username', newName);
+        Socket.emit('user:rename', { username: newName });
+      };
+
+      input.addEventListener('blur', save);
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); input.blur(); }
+        if (e.key === 'Escape') { display.textContent = current; }
       });
     });
   }

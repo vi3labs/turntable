@@ -738,10 +738,36 @@ html, body {
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
-/* QR Code widget — offset from sidebar on desktop */
-.qr-widget {
+/* QR Share toggle button */
+.qr-toggle-btn {
   position: fixed;
   bottom: var(--space-md);
+  right: calc(280px + var(--space-md));
+  z-index: 100;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-full);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-panel);
+  color: var(--text-secondary);
+  font-size: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  box-shadow: var(--shadow-card);
+}
+
+.qr-toggle-btn:hover {
+  background: var(--accent-primary-dim);
+  color: var(--accent-primary);
+}
+
+/* QR Code widget — shown above toggle button */
+.qr-widget {
+  position: fixed;
+  bottom: calc(var(--space-md) + 48px);
   right: calc(280px + var(--space-md));
   z-index: 100;
   background: white;
@@ -751,6 +777,12 @@ html, body {
   cursor: pointer;
   transition: transform var(--transition-fast), box-shadow var(--transition-fast);
   text-align: center;
+  animation: qr-slide-in 0.2s ease;
+}
+
+@keyframes qr-slide-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 .qr-widget:hover {
@@ -834,4 +866,34 @@ html, body {
 
 .qr-close-btn:hover {
   color: #333;
+}
+
+/* Name editor */
+.room-username {
+  font-size: var(--font-size-sm);
+  color: var(--text-secondary);
+}
+
+.edit-name-btn {
+  background: none;
+  color: var(--text-muted);
+  font-size: 14px;
+  padding: 2px 4px;
+  cursor: pointer;
+  border: none;
+  line-height: 1;
+}
+
+.edit-name-btn:hover {
+  color: var(--text-primary);
+}
+
+.edit-name-input {
+  background: var(--bg-input);
+  border: 1px solid var(--border-focus);
+  border-radius: var(--radius-sm);
+  padding: 4px 8px;
+  color: var(--text-primary);
+  font-size: var(--font-size-sm);
+  width: 120px;
 }

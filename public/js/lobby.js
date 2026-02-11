@@ -1,5 +1,6 @@
 const Lobby = {
   selectedAvatar: 0,
+  selectedTheme: '',
   socket: null,
 
   init() {
@@ -21,8 +22,7 @@ const Lobby = {
     }
   },
 
-  saveIdentity() {
-    const username = document.getElementById('username').value.trim();
+  saveIdentity(username) {
     sessionStorage.setItem('tt_username', username);
     sessionStorage.setItem('tt_avatar', this.selectedAvatar);
   },
@@ -51,21 +51,52 @@ const Lobby = {
   getUsername() {
     const input = document.getElementById('username').value.trim();
     if (!input) {
-      document.getElementById('username').focus();
-      document.getElementById('username').style.borderColor = 'var(--accent-lame)';
-      setTimeout(() => {
-        document.getElementById('username').style.borderColor = '';
-      }, 1500);
-      return null;
+      // Auto-generate name from selected avatar emoji + random number
+      const emoji = AVATARS[this.selectedAvatar] || '🎧';
+      return emoji + '-' + Math.floor(Math.random() * 9000 + 1000);
     }
     return input;
   },
 
+  parseSeedTracks() {
+    const textarea = document.getElementById('seed-tracks');
+    if (!textarea) return [];
+    const seedInput = textarea.value.trim();
+    if (!seedInput) return [];
+
+    const urlPattern = /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/|youtube\.com\/shorts\/)([a-zA-Z0-9_-]{11})/;
+    const playlistPattern = /[?&]list=([a-zA-Z0-9_-]+)/;
+    const barePattern = /^([a-zA-Z0-9_-]{11})$/;
+
+    // Check for playlist URL
+    const playlistMatch = seedInput.match(playlistPattern);
+    if (playlistMatch) {
+      return [{ playlistId: playlistMatch[1] }];
+    }
+
+    // Individual video URLs
+    const lines = seedInput.split(/[\n,]+/).map(l => l.trim()).filter(Boolean);
+    const tracks = [];
+    lines.forEach(line => {
+      const match = line.match(urlPattern) || line.match(barePattern);
+      if (match) tracks.push({ videoId: match[1] });
+    });
+    return tracks;
+  },
+
   bindEvents() {
+    // Theme picker
+    document.querySelectorAll('.theme-option').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.theme-option').forEach(b => b.classList.remove('selected'));
+        btn.classList.add('selected');
+        this.selectedTheme = btn.dataset.theme;
+      });
+    });
+
     // Create room
     document.getElementById('create-room-btn').addEventListener('click', () => {
       const username = this.getUsername();
-      if (!username) return;
 
       const name = document.getElementById('room-name').value.trim();
       if (!name) {
@@ -77,15 +108,17 @@ const Lobby = {
         return;
       }
 
-      const theme = document.getElementById('room-theme').value.trim();
-      this.saveIdentity();
+      const theme = this.selectedTheme;
+      const seedTracks = this.parseSeedTracks();
+      this.saveIdentity(username);
 
-      this.socket.emit('room:create', {
-        name,
-        theme,
-        username,
-        avatarId: this.selectedAvatar
-      });
+      // Update the input with the generated name so it shows in sessionStorage
+      document.getElementById('username').value = username;
+
+      const payload = { name, theme, username, avatarId: this.selectedAvatar };
+      if (seedTracks.length > 0) payload.seedTracks = seedTracks;
+
+      this.socket.emit('room:create', payload);
     });
 
     // Handle room created
@@ -147,8 +180,8 @@ const Lobby = {
 
   joinRoom(roomId) {
     const username = this.getUsername();
-    if (!username) return;
-    this.saveIdentity();
+    this.saveIdentity(username);
+    document.getElementById('username').value = username;
     window.location.href = `/room.html?id=${roomId}`;
   },
 
