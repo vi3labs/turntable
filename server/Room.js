@@ -33,25 +33,34 @@ export class Room {
   addUser(socketId, username, avatarId) {
     const publicId = nanoid(8);
     this.socketToPublicId.set(socketId, publicId);
+
+    let role = 'listener';
+
+    // Check for DJ slot reservation (reconnecting DJ)
+    const restored = this.djQueue.claimReservation(username, socketId, avatarId);
+    if (restored) {
+      role = 'dj';
+    }
+
     this.users.set(socketId, {
       id: socketId,
       publicId,
       username,
       avatarId,
-      role: 'listener',
+      role,
       reputation: 0,
       joinedAt: Date.now()
     });
-    return publicId;
+    return { publicId, restored: !!restored };
   }
 
   removeUser(socketId) {
     const user = this.users.get(socketId);
     if (!user) return;
 
-    // If DJ, step down
+    // If DJ, reserve slot for reconnection (30s grace period)
     if (this.djQueue.isDJ(socketId)) {
-      this.djQueue.stepDown(socketId);
+      this.djQueue.reserveSlot(socketId, user.username);
     }
 
     this.users.delete(socketId);
@@ -227,5 +236,6 @@ export class Room {
 
   destroy() {
     this.syncEngine.destroy();
+    this.djQueue.clearAllReservations();
   }
 }

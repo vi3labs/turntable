@@ -1,5 +1,3 @@
-const AVATARS = ['🎧', '🎤', '🎵', '🎸', '🥁', '🎹', '🎺', '🎻', '🪗', '🎷', '🪘', '🎶'];
-
 const Lobby = {
   selectedAvatar: 0,
   socket: null,

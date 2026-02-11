@@ -1,15 +1,48 @@
 const YOUTUBE_API_KEY = process.env.YOUTUBE_API_KEY;
 const BASE_URL = 'https://www.googleapis.com/youtube/v3';
 
-// Simple in-memory cache for search results (1 hour TTL)
+// Simple in-memory caches (1 hour TTL)
 const searchCache = new Map();
+const videoCache = new Map();
 const CACHE_TTL = 60 * 60 * 1000;
+
+// Quota exhaustion tracking
+let quotaExhausted = false;
+let quotaExhaustedAt = 0;
+const QUOTA_COOLDOWN_MS = 15 * 60 * 1000; // 15 min
+
+function isQuotaExhausted() {
+  if (!quotaExhausted) return false;
+  if (Date.now() - quotaExhaustedAt > QUOTA_COOLDOWN_MS) {
+    quotaExhausted = false;
+    return false;
+  }
+  return true;
+}
+
+function markQuotaExhausted() {
+  quotaExhausted = true;
+  quotaExhaustedAt = Date.now();
+}
+
+function isQuotaError(data) {
+  if (!data || !data.error) return false;
+  const reasons = data.error.errors || [];
+  return reasons.some(r =>
+    r.reason === 'quotaExceeded' || r.reason === 'dailyLimitExceeded'
+  );
+}
 
 function cleanCache() {
   const now = Date.now();
   for (const [key, entry] of searchCache) {
     if (now - entry.timestamp > CACHE_TTL) {
       searchCache.delete(key);
+    }
+  }
+  for (const [key, entry] of videoCache) {
+    if (now - entry.timestamp > CACHE_TTL) {
+      videoCache.delete(key);
     }
   }
 }
@@ -20,6 +53,10 @@ setInterval(cleanCache, 10 * 60 * 1000);
 export async function searchVideos(query, maxResults = 10) {
   if (!YOUTUBE_API_KEY) {
     return { error: 'YouTube API key not configured' };
+  }
+
+  if (isQuotaExhausted()) {
+    return { error: 'YouTube API quota exceeded. Try pasting a YouTube URL instead.', quotaExceeded: true };
   }
 
   // Check cache
@@ -44,6 +81,10 @@ export async function searchVideos(query, maxResults = 10) {
     const data = await response.json();
 
     if (data.error) {
+      if (isQuotaError(data)) {
+        markQuotaExhausted();
+        return { error: 'YouTube API quota exceeded. Try pasting a YouTube URL instead.', quotaExceeded: true };
+      }
       return { error: data.error.message };
     }
 
@@ -59,6 +100,11 @@ export async function searchVideos(query, maxResults = 10) {
 
     const detailResponse = await fetch(`${BASE_URL}/videos?${detailParams}`);
     const detailData = await detailResponse.json();
+
+    if (detailData.error && isQuotaError(detailData)) {
+      markQuotaExhausted();
+      return { error: 'YouTube API quota exceeded. Try pasting a YouTube URL instead.', quotaExceeded: true };
+    }
 
     const results = (detailData.items || []).map(item => ({
       videoId: item.id,
@@ -82,6 +128,16 @@ export async function getVideoInfo(videoId) {
     return { error: 'YouTube API key not configured' };
   }
 
+  // Check cache
+  const cached = videoCache.get(videoId);
+  if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+    return cached.result;
+  }
+
+  if (isQuotaExhausted()) {
+    return null;
+  }
+
   try {
     const params = new URLSearchParams({
       part: 'snippet,contentDetails',
@@ -92,16 +148,26 @@ export async function getVideoInfo(videoId) {
     const response = await fetch(`${BASE_URL}/videos?${params}`);
     const data = await response.json();
 
+    if (data.error && isQuotaError(data)) {
+      markQuotaExhausted();
+      return null;
+    }
+
     if (!data.items || data.items.length === 0) return null;
 
     const item = data.items[0];
-    return {
+    const result = {
       videoId: item.id,
       title: item.snippet.title,
       channel: item.snippet.channelTitle,
       thumbnail: item.snippet.thumbnails.medium?.url || item.snippet.thumbnails.default?.url,
       duration: parseDuration(item.contentDetails.duration)
     };
+
+    // Cache result
+    videoCache.set(videoId, { result, timestamp: Date.now() });
+
+    return result;
   } catch (err) {
     return null;
   }

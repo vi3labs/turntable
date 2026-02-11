@@ -79,7 +79,10 @@ const Queue = {
       const results = await response.json();
 
       if (results.error) {
-        resultsEl.innerHTML = '<div style="padding: 8px; color: var(--text-muted); font-size: 12px;">Search unavailable. Try pasting a YouTube URL instead.</div>';
+        const msg = response.status === 503 || results.quotaExceeded
+          ? 'YouTube search quota reached. Paste a YouTube URL directly to add tracks.'
+          : 'Search unavailable. Try pasting a YouTube URL instead.';
+        resultsEl.innerHTML = '<div style="padding: 8px; color: var(--text-muted); font-size: 12px;">' + msg + '</div>';
         resultsEl.classList.remove('hidden');
         return;
       }
@@ -305,9 +308,3 @@ const Queue = {
     }
   }
 };
-
-function formatTime(seconds) {
-  const m = Math.floor(seconds / 60);
-  const s = Math.floor(seconds % 60);
-  return m + ':' + (s < 10 ? '0' : '') + s;
-}

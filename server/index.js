@@ -57,9 +57,17 @@ class RateLimiter {
   delete(key) {
     this.records.delete(key);
   }
+
+  cleanup() {
+    const now = Date.now();
+    for (const [key, record] of this.records) {
+      record.timestamps = record.timestamps.filter(t => now - t < this.windowMs);
+      if (record.timestamps.length === 0) this.records.delete(key);
+    }
+  }
 }
 
-// Per-socket rate limiters
+// Per-IP rate limiters
 const chatLimiter = new RateLimiter(5, 10000);       // 5 msgs / 10s
 const actionLimiter = new RateLimiter(10, 5000);      // 10 actions / 5s (DJ, vote, etc.)
 const roomCreateLimiter = new RateLimiter(3, 60000);   // 3 rooms / 60s
@@ -130,6 +138,9 @@ app.get('/api/youtube/search', async (req, res) => {
   const q = req.query.q;
   if (!q || typeof q !== 'string') return res.json([]);
   const results = await searchVideos(q.substring(0, 200));
+  if (results && results.quotaExceeded) {
+    return res.status(503).json(results);
+  }
   res.json(results);
 });
 
@@ -236,7 +247,7 @@ io.on('connection', (socket) => {
 
     currentRoomId = data.roomId;
     socket.join(data.roomId);
-    room.addUser(socket.id, username, avatarId);
+    const { restored } = room.addUser(socket.id, username, avatarId);
 
     // Ensure track end callback is set
     if (!room.onTrackEndCallback) {
@@ -250,6 +261,14 @@ io.on('connection', (socket) => {
     const user = room.users.get(socket.id);
     socket.to(data.roomId).emit('user:joined', room.sanitizeUser(user));
     io.to(data.roomId).emit('roster:update', { users: room.sanitizeUsers() });
+
+    if (restored) {
+      io.to(data.roomId).emit('chat:system', {
+        text: username + ' reconnected and reclaimed their DJ slot'
+      });
+      io.to(data.roomId).emit('dj:update', room.getPublicDJState());
+    }
+
     broadcastRoomList();
   });
 
@@ -269,7 +288,7 @@ io.on('connection', (socket) => {
 
   socket.on('dj:stepUp', () => {
     if (!currentRoomId) return;
-    if (!actionLimiter.check(socket.id)) return;
+    if (!actionLimiter.check(socketIP)) return;
 
     const room = roomManager.getRoom(currentRoomId);
     if (!room) return;
@@ -289,7 +308,7 @@ io.on('connection', (socket) => {
 
   socket.on('dj:stepDown', () => {
     if (!currentRoomId) return;
-    if (!actionLimiter.check(socket.id)) return;
+    if (!actionLimiter.check(socketIP)) return;
 
     const room = roomManager.getRoom(currentRoomId);
     if (!room) return;
@@ -307,7 +326,7 @@ io.on('connection', (socket) => {
   socket.on('dj:queueTrack', async (data) => {
     if (!currentRoomId) return;
     if (!data || typeof data !== 'object') return;
-    if (!actionLimiter.check(socket.id)) {
+    if (!actionLimiter.check(socketIP)) {
       return socket.emit('room:error', { message: 'Slow down!' });
     }
 
@@ -373,7 +392,7 @@ io.on('connection', (socket) => {
   socket.on('dj:removeTrack', (data) => {
     if (!currentRoomId) return;
     if (!data || typeof data !== 'object') return;
-    if (!actionLimiter.check(socket.id)) return;
+    if (!actionLimiter.check(socketIP)) return;
 
     const trackIndex = data.trackIndex;
     if (!Number.isInteger(trackIndex)) return;
@@ -393,7 +412,7 @@ io.on('connection', (socket) => {
 
   socket.on('dj:skipTrack', () => {
     if (!currentRoomId) return;
-    if (!actionLimiter.check(socket.id)) return;
+    if (!actionLimiter.check(socketIP)) return;
 
     const room = roomManager.getRoom(currentRoomId);
     if (!room) return;
@@ -412,7 +431,7 @@ io.on('connection', (socket) => {
 
   socket.on('vote:awesome', () => {
     if (!currentRoomId) return;
-    if (!actionLimiter.check(socket.id)) return;
+    if (!actionLimiter.check(socketIP)) return;
 
     const room = roomManager.getRoom(currentRoomId);
     if (!room) return;
@@ -428,7 +447,7 @@ io.on('connection', (socket) => {
 
   socket.on('vote:lame', () => {
     if (!currentRoomId) return;
-    if (!actionLimiter.check(socket.id)) return;
+    if (!actionLimiter.check(socketIP)) return;
 
     const room = roomManager.getRoom(currentRoomId);
     if (!room) return;
@@ -454,7 +473,7 @@ io.on('connection', (socket) => {
     if (!data || typeof data !== 'object') return;
     if (!isString(data.text) || !data.text.trim()) return;
 
-    if (!chatLimiter.check(socket.id)) {
+    if (!chatLimiter.check(socketIP)) {
       return socket.emit('room:error', { message: 'Slow down! Too many messages.' });
     }
 
@@ -540,8 +559,6 @@ io.on('connection', (socket) => {
       ipConnectionCounts.set(socketIP, count - 1);
     }
 
-    chatLimiter.delete(socket.id);
-    actionLimiter.delete(socket.id);
     leaveCurrentRoom(socket);
   });
 
@@ -578,6 +595,14 @@ io.on('connection', (socket) => {
   }
 });
 
+// Periodic rate limiter cleanup (every 5 min)
+setInterval(() => {
+  chatLimiter.cleanup();
+  actionLimiter.cleanup();
+  roomCreateLimiter.cleanup();
+  searchLimiter.cleanup();
+}, 5 * 60 * 1000);
+
 // Periodic sync broadcast (every 5 seconds for active rooms)
 setInterval(() => {
   for (const [roomId, room] of roomManager.rooms) {
@@ -587,7 +612,12 @@ setInterval(() => {
   }
 }, 5000);
 
-const PORT = process.env.PORT || 3005;
-httpServer.listen(PORT, () => {
-  console.log(`Turntable server running on http://localhost:${PORT}`);
-});
+export { httpServer, io, roomManager, chatLimiter, actionLimiter, roomCreateLimiter, searchLimiter };
+
+const isMainModule = process.argv[1] && import.meta.url.endsWith(process.argv[1].replace(/\\/g, '/'));
+if (isMainModule) {
+  const PORT = process.env.PORT || 3005;
+  httpServer.listen(PORT, () => {
+    console.log(`Turntable server running on http://localhost:${PORT}`);
+  });
+}

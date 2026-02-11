@@ -3,6 +3,7 @@ export class DJQueue {
     this.maxSlots = maxSlots;
     this.slots = []; // Array<{userId, username, avatarId, queue: Track[], totalAwesome: 0}>
     this.currentIndex = -1;
+    this.reservedSlots = new Map(); // username -> { slot, timer, originalIndex }
   }
 
   stepUp(userId, username, avatarId) {
@@ -80,6 +81,75 @@ export class DJQueue {
 
   getDJ(userId) {
     return this.slots.find(d => d.userId === userId);
+  }
+
+  reserveSlot(userId, username) {
+    const index = this.slots.findIndex(d => d.userId === userId);
+    if (index === -1) return false;
+
+    const slot = { ...this.slots[index], queue: [...this.slots[index].queue] };
+    const originalIndex = index;
+
+    // Remove from active slots (same logic as stepDown)
+    this.slots.splice(index, 1);
+    if (this.slots.length === 0) {
+      this.currentIndex = -1;
+    } else if (index <= this.currentIndex) {
+      this.currentIndex = Math.max(0, this.currentIndex - 1);
+    }
+
+    // Clear any existing reservation for this username
+    this.clearReservation(username);
+
+    // Store reservation with 30-second expiry
+    const timer = setTimeout(() => {
+      this.reservedSlots.delete(username);
+    }, 30000);
+
+    this.reservedSlots.set(username, { slot, timer, originalIndex });
+    return true;
+  }
+
+  claimReservation(username, newUserId, newAvatarId) {
+    const reservation = this.reservedSlots.get(username);
+    if (!reservation) return null;
+
+    clearTimeout(reservation.timer);
+    this.reservedSlots.delete(username);
+
+    const slot = reservation.slot;
+    slot.userId = newUserId;
+    slot.avatarId = newAvatarId;
+
+    // Re-insert at original position if possible, otherwise append
+    const insertAt = Math.min(reservation.originalIndex, this.slots.length);
+    this.slots.splice(insertAt, 0, slot);
+
+    // Adjust currentIndex if we inserted before or at it
+    if (this.currentIndex >= 0 && insertAt <= this.currentIndex) {
+      this.currentIndex++;
+    }
+
+    return slot;
+  }
+
+  clearReservation(username) {
+    const existing = this.reservedSlots.get(username);
+    if (existing) {
+      clearTimeout(existing.timer);
+      this.reservedSlots.delete(username);
+    }
+  }
+
+  hasReservation(username) {
+    return this.reservedSlots.has(username);
+  }
+
+  clearAllReservations() {
+    for (const [, reservation] of this.reservedSlots) {
+      clearTimeout(reservation.timer);
+    }
+    this.reservedSlots.clear();
   }
 
   awardReputation(userId, points) {

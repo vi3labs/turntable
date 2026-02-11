@@ -1,0 +1,34 @@
+/* Room themes */
+.room-theme-neon {
+  --accent-primary: #ff006e;
+  --accent-primary-dim: rgba(255, 0, 110, 0.15);
+  --accent-chat: #ff69b4;
+  --bg-stage: #1a0012;
+}
+
+.room-theme-chill {
+  --accent-primary: #00cec9;
+  --accent-primary-dim: rgba(0, 206, 201, 0.15);
+  --accent-chat: #81ecec;
+  --bg-stage: #0a1a1a;
+}
+
+.room-theme-retro {
+  --accent-primary: #e17055;
+  --accent-primary-dim: rgba(225, 112, 85, 0.15);
+  --accent-chat: #fab1a0;
+  --bg-stage: #1a110e;
+}
+
+.room-theme-midnight {
+  --accent-primary: #0984e3;
+  --accent-primary-dim: rgba(9, 132, 227, 0.15);
+  --accent-chat: #74b9ff;
+  --bg-stage: #0a0e1a;
+}
+
+/* Room themes - light mode */
+[data-theme="light"] .room-theme-neon { --bg-stage: #fff0f6; }
+[data-theme="light"] .room-theme-chill { --bg-stage: #f0fffe; }
+[data-theme="light"] .room-theme-retro { --bg-stage: #fff5f0; }
+[data-theme="light"] .room-theme-midnight { --bg-stage: #f0f5ff; }
