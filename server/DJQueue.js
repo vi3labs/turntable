@@ -42,6 +42,12 @@ export class DJQueue {
     const dj = this.slots.find(d => d.userId === userId);
     if (!dj) return { error: 'Not a DJ' };
     if (dj.queue.length >= 20) return { error: 'Queue full (max 20 tracks)' };
+
+    // Check if this videoId already exists in the DJ's queue
+    if (dj.queue.some(t => t.videoId === track.videoId)) {
+      return { error: 'Track already in your queue' };
+    }
+
     dj.queue.push(track);
     return { success: true, position: dj.queue.length - 1 };
   }
