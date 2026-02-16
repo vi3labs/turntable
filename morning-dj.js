@@ -53,7 +53,7 @@ socket.on('room:state', () => {
     roomId,
     track: track.title,
     videoId: track.videoId,
-    localUrl: `http://localhost:3005/room.html?id=${roomId}`,
+    localUrl: `${SERVER}/room.html?id=${roomId}`,
   };
   console.log(JSON.stringify(result));
 });

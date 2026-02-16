@@ -38,6 +38,11 @@ const RoomController = {
       Socket.emit('dj:skipTrack');
     });
 
+    // Share button
+    document.getElementById('share-btn').addEventListener('click', () => {
+      this.shareTrack();
+    });
+
     // Bind socket events
     this.bindEvents();
 
@@ -184,8 +189,25 @@ const RoomController = {
 
   updateSkipButton() {
     const skipBtn = document.getElementById('skip-btn');
+    const shareBtn = document.getElementById('share-btn');
     const isMyTrack = Socket.currentDJId && Socket.currentDJId === Socket.myId;
+    const isPlaying = !!Socket.currentDJId;
     skipBtn.classList.toggle('hidden', !isMyTrack);
+    shareBtn.classList.toggle('hidden', !isPlaying);
+  },
+
+  shareTrack() {
+    const title = document.getElementById('np-title').textContent;
+    const dj = document.getElementById('np-dj').textContent;
+    const roomName = document.getElementById('room-name').textContent;
+    const roomUrl = window.location.href;
+
+    const text = '\u{1F3A7} Now spinning in ' + roomName + ': ' + title +
+      '\n\u{1F3B5} ' + dj +
+      '\nJoin the room: ' + roomUrl;
+
+    const intentUrl = 'https://x.com/intent/tweet?text=' + encodeURIComponent(text);
+    window.open(intentUrl, '_blank', 'width=550,height=420');
   },
 
   applyRoomTheme(themeText) {

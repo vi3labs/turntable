@@ -8,7 +8,24 @@ import { searchVideos, getVideoInfo, extractVideoId, getPlaylistItems } from './
 
 const app = express();
 const httpServer = createServer(app);
-const io = new Server(httpServer);
+
+// Allowed origins — localhost for dev, VPS for production
+const ALLOWED_ORIGINS = [
+  'http://localhost:3005',
+  'http://127.0.0.1:3005',
+  process.env.PUBLIC_URL,          // e.g. https://turntable.yourdomain.com
+].filter(Boolean);
+
+const io = new Server(httpServer, {
+  cors: {
+    origin: (origin, cb) => {
+      // Allow no-origin requests (same-origin, curl, etc.)
+      if (!origin || ALLOWED_ORIGINS.includes(origin)) return cb(null, true);
+      cb(new Error('Origin not allowed'));
+    },
+    methods: ['GET', 'POST'],
+  },
+});
 
 // --- Security headers ---
 app.use(helmet({
@@ -18,7 +35,7 @@ app.use(helmet({
       scriptSrc: ["'self'", "https://www.youtube.com", "https://s.ytimg.com"],
       frameSrc: ["https://www.youtube.com"],
       imgSrc: ["'self'", "https://i.ytimg.com", "https://*.ggpht.com", "https://api.qrserver.com", "data:"],
-      connectSrc: ["'self'", "ws:", "wss:"],
+      connectSrc: ["'self'", "wss:", ...(process.env.NODE_ENV !== 'production' ? ["ws:"] : [])],
       styleSrc: ["'self'", "https://fonts.googleapis.com", "'unsafe-inline'"],
       fontSrc: ["'self'", "https://fonts.gstatic.com"],
     }
@@ -72,6 +89,7 @@ const chatLimiter = new RateLimiter(5, 10000);       // 5 msgs / 10s
 const actionLimiter = new RateLimiter(10, 5000);      // 10 actions / 5s (DJ, vote, etc.)
 const roomCreateLimiter = new RateLimiter(3, 60000);   // 3 rooms / 60s
 const searchLimiter = new RateLimiter(20, 60000);      // 20 searches / 60s per IP
+const pingLimiter = new RateLimiter(10, 5000);         // 10 pings / 5s per IP
 
 // =============================================================================
 // Connection limits
@@ -228,9 +246,12 @@ io.on('connection', (socket) => {
       return socket.emit('room:error', { message: 'Server is full. Try again later.' });
     }
 
+    const VALID_THEMES = ['', 'neon', 'chill', 'retro', 'midnight'];
+    const theme = VALID_THEMES.includes(data.theme) ? data.theme : '';
+
     const room = roomManager.createRoom(
       sanitizeString(data.name, 50),
-      sanitizeString(data.theme, 30),
+      theme,
       socket.id
     );
 
@@ -242,8 +263,12 @@ io.on('connection', (socket) => {
 
       const playlistEntry = data.seedTracks.find(t => t.playlistId);
       if (playlistEntry) {
+        const plId = sanitizeString(playlistEntry.playlistId, 50);
+        if (!/^[a-zA-Z0-9_-]+$/.test(plId)) {
+          return socket.emit('room:error', { message: 'Invalid playlist ID' });
+        }
         const items = await getPlaylistItems(
-          sanitizeString(playlistEntry.playlistId, 50),
+          plId,
           20
         );
         if (Array.isArray(items)) {
@@ -340,6 +365,7 @@ io.on('connection', (socket) => {
 
   // --- Clock sync ---
   socket.on('ping:sync', (data, callback) => {
+    if (!pingLimiter.check(socketIP)) return;
     if (typeof callback === 'function' && data && typeof data.t0 === 'number') {
       callback({ t0: data.t0, t1: Date.now() });
     }
@@ -402,7 +428,7 @@ io.on('connection', (socket) => {
     let track;
     const { videoId, url, title, thumbnail, duration } = data;
 
-    if (isString(videoId) && isNonEmptyString(title) && typeof duration === 'number' && duration > 0) {
+    if (isString(videoId) && isNonEmptyString(title) && typeof duration === 'number' && isFinite(duration) && duration > 0) {
       // Full track info from search results — validate videoId format
       const cleanId = extractVideoId(videoId) || videoId;
       if (!/^[a-zA-Z0-9_-]{11}$/.test(cleanId)) {
@@ -714,6 +740,7 @@ setInterval(() => {
   actionLimiter.cleanup();
   roomCreateLimiter.cleanup();
   searchLimiter.cleanup();
+  pingLimiter.cleanup();
 }, 5 * 60 * 1000);
 
 // Periodic sync broadcast (every 5 seconds for active rooms)
@@ -735,12 +762,13 @@ setInterval(() => {
   }
 }, 5000);
 
-export { httpServer, io, roomManager, chatLimiter, actionLimiter, roomCreateLimiter, searchLimiter };
+export { httpServer, io, roomManager, chatLimiter, actionLimiter, roomCreateLimiter, searchLimiter, pingLimiter };
 
 const isMainModule = process.argv[1] && import.meta.url.endsWith(process.argv[1].replace(/\\/g, '/'));
 if (isMainModule) {
   const PORT = process.env.PORT || 3005;
   httpServer.listen(PORT, () => {
-    console.log(`Turntable server running on http://localhost:${PORT}`);
+    const url = process.env.PUBLIC_URL || `http://localhost:${PORT}`;
+    console.log(`Turntable server running on ${url} (port ${PORT})`);
   });
 }

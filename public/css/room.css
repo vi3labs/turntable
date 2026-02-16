@@ -676,6 +676,23 @@ html, body {
   color: var(--accent-primary);
 }
 
+/* Share button */
+.share-btn {
+  padding: 8px 14px;
+  border-radius: var(--radius-full);
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  transition: all var(--transition-fast);
+  white-space: nowrap;
+}
+
+.share-btn:hover {
+  background: #1d9bf0;
+  color: white;
+}
+
 /* Connection banner */
 .connection-banner {
   position: fixed;
