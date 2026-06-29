@@ -11,7 +11,7 @@ npm run dev    # Start with --watch (auto-restart on changes), port 3005
 npm start      # Start server (port 3005)
 ```
 
-Requires `YOUTUBE_API_KEY` in `.env`.
+Server runs on `http://localhost:3005`. Requires `YOUTUBE_API_KEY` in `.env`.
 
 ## Tech Stack
 
@@ -76,11 +76,11 @@ Clients never see socket IDs. Server assigns 8-char nanoid public IDs on connect
 | `chat:message` | `{text}` | Send chat message |
 | `dj:stepUp` | - | Join DJ queue |
 | `dj:stepDown` | - | Leave DJ queue |
-| `dj:queueTrack` | `{url}` or `{videoId, title, thumbnail, duration}` | Add track |
+| `dj:queueTrack` | `{url}` or `{videoId, title, thumbnail, duration}` | Add track to queue |
 | `dj:removeTrack` | `{trackIndex}` | Remove track from own queue |
 | `dj:skipTrack` | - | Skip own currently-playing track |
-| `vote:awesome` | - | Vote awesome |
-| `vote:lame` | - | Vote lame |
+| `vote:awesome` | - | Vote awesome on current track |
+| `vote:lame` | - | Vote lame on current track |
 | `clock:ping` | `{t0}` | Clock calibration ping |
 
 ### Server -> Client
@@ -91,6 +91,7 @@ Clients never see socket IDs. Server assigns 8-char nanoid public IDs on connect
 | `track:sync` | Sync data | Periodic sync pulse |
 | `track:idle` | - | No tracks playing |
 | `track:skip` | `{reason}` | Track was skipped |
+| `track:metadata:update` | `{title, duration}` | Resolved metadata |
 | `chat:message` | `{username, text, timestamp}` | Chat message |
 | `chat:system` | `{text}` | System message |
 | `vote:update` | `{awesome, lame}` | Vote counts |
@@ -102,11 +103,11 @@ Clients never see socket IDs. Server assigns 8-char nanoid public IDs on connect
 
 ## Conventions
 
-- All user-generated strings rendered via `textContent` (never `innerHTML`) for XSS prevention
+- All user-generated strings rendered via `textContent` (never `innerHTML`) to prevent XSS
 - CSS custom properties in `variables.css` for all colors, spacing, typography
 - Dark/light mode via `data-theme` attribute on `<html>`
 - Room themes override CSS variables on `.room-layout` (neon, chill, retro, midnight)
-- Responsive breakpoint at 1024px
+- Responsive breakpoint at 1024px (covers phones + tablets)
 - Rate limiting: chat (1/sec), actions (2/sec), room creation (1/10sec), search (1/2sec)
 - YouTube API key stays server-side; client searches via `/api/youtube/search`
 
